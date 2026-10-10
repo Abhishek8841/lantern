@@ -1,7 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"log"
+
+	"github.com/abhishek8841/lantern/internal/transport/tcp"
+)
 
 func main() {
-	fmt.Println("LANtern is starting...")
+	if err := tcp.StartListener(":8080"); err != nil {
+		log.Fatal(err)
+	}
 }
