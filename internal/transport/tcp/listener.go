@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"fmt"
+	"io"
 	"net"
 )
 
@@ -21,6 +22,33 @@ func StartListener(address string) error {
 		}
 
 		fmt.Println("Peer connected:", conn.RemoteAddr())
-		conn.Close()
+
+		go func(connection net.Conn) {
+			if err := handleConnection(conn); err != nil {
+				fmt.Println("Connection ended:", err)
+			}
+		}(conn)
+	}
+}
+
+func handleConnection(conn net.Conn) error {
+	defer conn.Close()
+
+	buffer := make([]byte, 1024)
+
+	for {
+		n, err := conn.Read(buffer)
+
+		if n > 0 {
+			fmt.Printf("Received: %s from %s\n", string(buffer[:n]), conn.RemoteAddr())
+		}
+
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println("Peer disconnected")
+				return nil
+			}
+			return fmt.Errorf("read from peer: %w", err)
+		}
 	}
 }
