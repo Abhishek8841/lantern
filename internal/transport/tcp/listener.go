@@ -12,6 +12,7 @@ import (
 func StartListener(address string) error {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
+		// this wraps the err inside another error ??? -> error.is() gives true in the wrapping case but == doesn't
 		return fmt.Errorf("start TCP listener: %w", err)
 	}
 	defer listener.Close()

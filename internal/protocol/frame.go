@@ -9,6 +9,7 @@ import (
 const (
 	HeaderSize   = 4
 	MaxFrameSize = 1 << 20
+	//  x << y === x * (2^y) ???
 )
 
 func WriteFrame(w io.Writer, payload []byte) error {
@@ -53,6 +54,7 @@ func ReadFrame(r io.Reader) ([]byte, error) {
 	return payload, nil
 }
 
+// using io.writer is known as programming to an interface rather than a concrete implementation
 func writeFull(w io.Writer, data []byte) error {
 	for len(data) > 0 {
 		n, err := w.Write(data)
@@ -67,6 +69,7 @@ func writeFull(w io.Writer, data []byte) error {
 
 		if n == 0 {
 			return io.ErrShortWrite
+			// return when writing didn't make enough progress i.e. the
 		}
 	}
 
