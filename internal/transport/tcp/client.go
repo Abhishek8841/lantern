@@ -3,6 +3,8 @@ package tcp
 import (
 	"fmt"
 	"net"
+
+	"github.com/abhishek8841/lantern/internal/protocol"
 )
 
 func SendMessage(address string, message string) error {
@@ -12,9 +14,12 @@ func SendMessage(address string, message string) error {
 	}
 	defer conn.Close()
 
-	_, err = conn.Write([]byte(message))
-	if err != nil {
-		return fmt.Errorf("send message: %w", err)
+	// _, err = conn.Write([]byte(message))
+	// if err != nil {
+	// 	return fmt.Errorf("send message: %w", err)
+	// }
+	if err := protocol.WriteFrame(conn, []byte(message)); err != nil {
+		return fmt.Errorf("send framed message: %w", err)
 	}
 
 	fmt.Println("Message sent to", address)

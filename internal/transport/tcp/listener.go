@@ -1,9 +1,12 @@
 package tcp
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
+
+	"github.com/abhishek8841/lantern/internal/protocol"
 )
 
 func StartListener(address string) error {
@@ -31,24 +34,39 @@ func StartListener(address string) error {
 	}
 }
 
+// func handleConnection(conn net.Conn) error {
+// 	defer conn.Close()
+
+// 	buffer := make([]byte, 1024)
+
+// 	for {
+// 		n, err := conn.Read(buffer)
+
+// 		if n > 0 {
+// 			fmt.Printf("Received: %s from %s\n", string(buffer[:n]), conn.RemoteAddr())
+// 		}
+
+// 		if err != nil {
+// 			if err == io.EOF {
+// 				fmt.Println("Peer disconnected")
+// 				return nil
+// 			}
+// 			return fmt.Errorf("read from peer: %w", err)
+// 		}
+// 	}
+// }
+
 func handleConnection(conn net.Conn) error {
-	defer conn.Close()
-
-	buffer := make([]byte, 1024)
-
 	for {
-		n, err := conn.Read(buffer)
-
-		if n > 0 {
-			fmt.Printf("Received: %s from %s\n", string(buffer[:n]), conn.RemoteAddr())
-		}
-
+		message, err := protocol.ReadFrame(conn)
 		if err != nil {
-			if err == io.EOF {
-				fmt.Println("Peer disconnected")
+			if errors.Is(err, io.EOF) {
+				fmt.Println("Peer disconnected:", conn.RemoteAddr())
 				return nil
 			}
-			return fmt.Errorf("read from peer: %w", err)
+			return fmt.Errorf("read message from %s: %w", conn.RemoteAddr(), err)
 		}
+
+		fmt.Printf("Received from %s: %s\n", conn.RemoteAddr(), string(message))
 	}
 }
