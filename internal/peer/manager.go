@@ -1,7 +1,9 @@
-
 package peer
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 type Manager struct {
 	mu    sync.RWMutex
@@ -41,4 +43,18 @@ func (m *Manager) Count() int {
 	defer m.mu.RUnlock()
 
 	return len(m.peers)
+}
+
+func (m *Manager) CloseAll() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var firstError error
+
+	for id, p := range m.peers {
+		if err := p.Conn.Close(); err != nil && firstError == nil {
+			firstError = fmt.Errorf("close peer %s: %w", id, err)
+		}
+	}
+	return firstError
 }

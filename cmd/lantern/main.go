@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+	"os/signal"
 
 	"github.com/abhishek8841/lantern/internal/peer"
 	"github.com/abhishek8841/lantern/internal/transport/tcp"
@@ -15,8 +17,10 @@ func main() {
 
 	switch os.Args[1] {
 	case "listen":
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
 		manager := peer.NewManager()
-		if err := tcp.StartListener(":8080", manager); err != nil {
+		if err := tcp.StartListener(ctx, ":8080", manager); err != nil {
 			log.Fatal(err)
 		}
 	case "send":

@@ -1,16 +1,18 @@
 package tcp
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"sync"
 
 	"github.com/abhishek8841/lantern/internal/peer"
 	"github.com/abhishek8841/lantern/internal/protocol"
 )
 
-func StartListener(address string, manager *peer.Manager) error {
+func StartListener(ctx context.Context, address string, manager *peer.Manager) error {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		// this wraps the err inside another error ??? -> error.is() gives true in the wrapping case but == doesn't
@@ -18,12 +20,27 @@ func StartListener(address string, manager *peer.Manager) error {
 	}
 	defer listener.Close()
 
+	var handlers sync.WaitGroup
+
+	go func() {
+		<-ctx.Done()
+		_ = listener.Close()
+	}()
+
 	fmt.Println("LANtern listening on", listener.Addr())
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			if ctx.Err() != nil {
+				break
+			}
 			return fmt.Errorf("accept connection: %w", err)
+		}
+
+		if ctx.Err() != nil {
+			_ = conn.Close()
+			break
 		}
 
 		p := &peer.Peer{
@@ -32,9 +49,12 @@ func StartListener(address string, manager *peer.Manager) error {
 		}
 
 		manager.Add(p)
+		handlers.Add(1)
+
 		fmt.Println("Peer connected:", conn.RemoteAddr())
 
 		go func(p *peer.Peer) {
+			defer handlers.Done()
 			defer p.Conn.Close()
 			defer manager.Remove(p.ID)
 			if err := handleConnection(p.Conn); err != nil {
@@ -42,6 +62,9 @@ func StartListener(address string, manager *peer.Manager) error {
 			}
 		}(p)
 	}
+	_ = manager.CloseAll()
+	handlers.Wait()
+	return nil
 }
 
 // func handleConnection(conn net.Conn) error {
