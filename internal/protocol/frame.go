@@ -69,7 +69,7 @@ func writeFull(w io.Writer, data []byte) error {
 
 		if n == 0 {
 			return io.ErrShortWrite
-			// return when writing didn't make enough progress i.e. the
+			// return when writing didn't make enough progress
 		}
 	}
 
