@@ -6,10 +6,11 @@ import (
 	"io"
 	"net"
 
+	"github.com/abhishek8841/lantern/internal/peer"
 	"github.com/abhishek8841/lantern/internal/protocol"
 )
 
-func StartListener(address string) error {
+func StartListener(address string, manager *peer.Manager) error {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		// this wraps the err inside another error ??? -> error.is() gives true in the wrapping case but == doesn't
@@ -25,14 +26,21 @@ func StartListener(address string) error {
 			return fmt.Errorf("accept connection: %w", err)
 		}
 
+		p := &peer.Peer{
+			ID:   conn.RemoteAddr().String(),
+			Conn: conn,
+		}
+
+		manager.Add(p)
 		fmt.Println("Peer connected:", conn.RemoteAddr())
 
-		go func(connection net.Conn) {
-			defer connection.Close()
-			if err := handleConnection(connection); err != nil {
+		go func(p *peer.Peer) {
+			defer p.Conn.Close()
+			defer manager.Remove(p.ID)
+			if err := handleConnection(p.Conn); err != nil {
 				fmt.Println("Connection ended:", err)
 			}
-		}(conn)
+		}(p)
 	}
 }
 

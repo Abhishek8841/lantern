@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/abhishek8841/lantern/internal/peer"
 	"github.com/abhishek8841/lantern/internal/transport/tcp"
 )
 
@@ -14,7 +15,8 @@ func main() {
 
 	switch os.Args[1] {
 	case "listen":
-		if err := tcp.StartListener(":8080"); err != nil {
+		manager := peer.NewManager()
+		if err := tcp.StartListener(":8080", manager); err != nil {
 			log.Fatal(err)
 		}
 	case "send":
