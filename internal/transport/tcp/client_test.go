@@ -9,6 +9,8 @@ import (
 	"github.com/abhishek8841/lantern/internal/protocol"
 )
 
+// %v for original format but %w in fmt.errorF() to wrap the error to be inspected by fns like error.is()
+
 func TestTCPFramedMessage(t *testing.T) {
 	// :0 tells the OS to automatically chose the port 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

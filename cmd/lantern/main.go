@@ -18,8 +18,22 @@ func main() {
 			log.Fatal(err)
 		}
 	case "send":
-		if err := tcp.SendMessage("127.0.0.1:8080", "Hello from LANtern!"); err != nil {
+		peer, err := tcp.DialPeer("127.0.0.1:8080")
+		if err != nil {
 			log.Fatal(err)
+		}
+		defer peer.Close()
+
+		messages := []string{
+			"Hello from LANtern!",
+			"This is message two",
+			"This is message three",
+		}
+
+		for _, message := range messages {
+			if err := peer.SendMessage(message); err != nil {
+				log.Fatal(err)
+			}
 		}
 	default:
 		log.Fatal("unknown mode: use listen or send")

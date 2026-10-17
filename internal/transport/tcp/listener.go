@@ -28,6 +28,7 @@ func StartListener(address string) error {
 		fmt.Println("Peer connected:", conn.RemoteAddr())
 
 		go func(connection net.Conn) {
+			defer connection.Close()
 			if err := handleConnection(connection); err != nil {
 				fmt.Println("Connection ended:", err)
 			}
