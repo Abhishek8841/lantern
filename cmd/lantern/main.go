@@ -7,8 +7,10 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/abhishek8841/lantern/internal/peer"
+	"github.com/abhishek8841/lantern/internal/protocol"
 	"github.com/abhishek8841/lantern/internal/transport/tcp"
 )
 
@@ -18,6 +20,7 @@ func main() {
 	}
 
 	switch os.Args[1] {
+
 	case "listen":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
@@ -25,7 +28,10 @@ func main() {
 		if err := tcp.StartListener(ctx, ":8080", manager); err != nil {
 			log.Fatal(err)
 		}
+
 	case "send":
+		peerID := protocol.NewMessageID()
+
 		peerConn, err := tcp.DialPeer("127.0.0.1:8080")
 		if err != nil {
 			log.Fatal(err)
@@ -49,7 +55,21 @@ func main() {
 				break
 			}
 
-			if err := peerConn.SendMessage(message); err != nil {
+			envelope := protocol.Envelope{
+				Type:      protocol.MessageTypeMessage,
+				ID:        protocol.NewMessageID(),
+				SenderID:  peerID,
+				Timestamp: time.Now().UTC(),
+				Payload:   message,
+			}
+
+			data, err := protocol.EncodeMessage(envelope)
+			if err != nil {
+				log.Printf("encode message: %v", err)
+				break
+			}
+
+			if err := peerConn.SendMessage(string(data)); err != nil {
 				log.Printf("send message: %v", err)
 				break
 			}
@@ -62,4 +82,5 @@ func main() {
 	default:
 		log.Fatal("unknown mode: use listen or send")
 	}
+
 }

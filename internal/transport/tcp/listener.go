@@ -110,6 +110,17 @@ func handleConnection(conn net.Conn) error {
 			return fmt.Errorf("read message from %s: %w", conn.RemoteAddr(), err)
 		}
 
-		fmt.Printf("Received from %s: %s\n", conn.RemoteAddr(), string(message))
+		envelope, err := protocol.DecodeMessage(message)
+		if err != nil {
+			return fmt.Errorf("decode message from %s: %w", conn.RemoteAddr(), err)
+		}
+
+		switch envelope.Type {
+		case protocol.MessageTypeMessage:
+			fmt.Printf("[%s] %s\n", envelope.SenderID, envelope.Payload)
+
+		default:
+			return fmt.Errorf("unsupported message type: %q", envelope.Type)
+		}
 	}
 }
