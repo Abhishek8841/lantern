@@ -65,6 +65,9 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager) e
 			defer p.Conn.Close()
 			defer manager.Remove(p.ID)
 			if err := handleConnection(p.Conn); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
 				fmt.Println("Connection ended:", err)
 			}
 		}(p)

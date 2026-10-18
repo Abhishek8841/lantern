@@ -60,7 +60,7 @@ func (m *Manager) CloseAll() error {
 	for _, p := range m.peers {
 		peers = append(peers, p)
 	}
-	
+
 	m.mu.Unlock()
 
 	var firstError error
@@ -72,3 +72,5 @@ func (m *Manager) CloseAll() error {
 	}
 	return firstError
 }
+
+// select {} quick hack to keep a goroutine alive to test temporarily
