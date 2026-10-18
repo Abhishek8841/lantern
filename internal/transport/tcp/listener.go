@@ -29,13 +29,16 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager) e
 
 	fmt.Println("LANtern listening on", listener.Addr())
 
+	var returnError error = nil
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
 			if ctx.Err() != nil {
 				break
 			}
-			return fmt.Errorf("accept connection: %w", err)
+			returnError = fmt.Errorf("accept connection: %w", err)
+			break
 		}
 
 		if ctx.Err() != nil {
@@ -48,7 +51,11 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager) e
 			Conn: conn,
 		}
 
-		manager.Add(p)
+		successfullAdd := manager.Add(p)
+		if !successfullAdd {
+			_ = conn.Close()
+			continue
+		}
 		handlers.Add(1)
 
 		fmt.Println("Peer connected:", conn.RemoteAddr())
@@ -64,7 +71,7 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager) e
 	}
 	_ = manager.CloseAll()
 	handlers.Wait()
-	return nil
+	return returnError
 }
 
 // func handleConnection(conn net.Conn) error {

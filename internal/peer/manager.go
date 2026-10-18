@@ -6,8 +6,9 @@ import (
 )
 
 type Manager struct {
-	mu    sync.RWMutex
-	peers map[string]*Peer
+	mu       sync.RWMutex
+	peers    map[string]*Peer
+	shutting bool
 }
 
 func NewManager() *Manager {
@@ -16,11 +17,16 @@ func NewManager() *Manager {
 	}
 }
 
-func (m *Manager) Add(p *Peer) {
+func (m *Manager) Add(p *Peer) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if m.shutting {
+		return false
+	}
+
 	m.peers[p.ID] = p
+	return true
 }
 
 func (m *Manager) Get(id string) (*Peer, bool) {
@@ -47,13 +53,21 @@ func (m *Manager) Count() int {
 
 func (m *Manager) CloseAll() error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+
+	m.shutting = true
+
+	peers := make([]*Peer, 0, len(m.peers))
+	for _, p := range m.peers {
+		peers = append(peers, p)
+	}
+	
+	m.mu.Unlock()
 
 	var firstError error
 
-	for id, p := range m.peers {
+	for _, p := range peers {
 		if err := p.Conn.Close(); err != nil && firstError == nil {
-			firstError = fmt.Errorf("close peer %s: %w", id, err)
+			firstError = fmt.Errorf("close peer %s: %w", p.ID, err)
 		}
 	}
 	return firstError
