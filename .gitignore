@@ -44,3 +44,6 @@ data/
 Thumbs.db
 
 bin
+
+# peer identity file
+lantern-identity

@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/abhishek8841/lantern/internal/identity"
 	"github.com/abhishek8841/lantern/internal/peer"
 	"github.com/abhishek8841/lantern/internal/protocol"
 	"github.com/abhishek8841/lantern/internal/transport/tcp"
@@ -30,8 +31,11 @@ func main() {
 		}
 
 	case "send":
-		peerID := protocol.NewMessageID()
-
+		peerID, err := identity.LoadOrCreate("lantern-identity")
+		if err != nil {
+			log.Fatal(err)
+		}
+		
 		peerConn, err := tcp.DialPeer("127.0.0.1:8080")
 		if err != nil {
 			log.Fatal(err)
