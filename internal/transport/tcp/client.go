@@ -3,6 +3,7 @@ package tcp
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/abhishek8841/lantern/internal/protocol"
 )
@@ -21,19 +22,42 @@ func DialPeer(address string) (*PeerConn, error) {
 	}, nil
 }
 
-func (p *PeerConn) SendMessage(message string) error {
-	err := protocol.WriteFrame(p.conn, []byte(message))
-	if err != nil {
-		return fmt.Errorf("protocol.WriteFrame() error: %w", err)
-	}
-	return nil
-}
 
 func (p *PeerConn) Close() error {
 	if err := p.conn.Close(); err != nil {
 		return fmt.Errorf("close peer connection: %w", err)
 	}
 	return nil
+}
+
+func (p *PeerConn) sendEnvelope(message protocol.Envelope) error {
+	data, err := protocol.EncodeMessage(message)
+	if err != nil {
+		return fmt.Errorf("encode message: %w", err)
+	}
+	if err := protocol.WriteFrame(p.conn, data); err != nil {
+		return fmt.Errorf("protocol.WriteFrame() error: %w", err)
+	}
+	return nil
+}
+
+func (p *PeerConn) SendHello(peerID string) error {
+	return p.sendEnvelope(protocol.Envelope{
+		Type:      protocol.MessageTypeHello,
+		ID:        protocol.NewMessageID(),
+		SenderID:  peerID,
+		Timestamp: time.Now().UTC(),
+	})
+}
+
+func (p *PeerConn) SendMessage(peerID string, message string) error {
+	return p.sendEnvelope(protocol.Envelope{
+		Type:      protocol.MessageTypeMessage,
+		ID:        protocol.NewMessageID(),
+		SenderID:  peerID,
+		Timestamp: time.Now().UTC(),
+		Payload:   message,
+	})
 }
 
 // func SendMessage(address string, message string) error {

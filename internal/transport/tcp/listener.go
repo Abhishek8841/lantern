@@ -12,6 +12,8 @@ import (
 	"github.com/abhishek8841/lantern/internal/protocol"
 )
 
+// fix the unhandled goroutine leak here is .Accept() errors ??? 
+
 func StartListener(ctx context.Context, address string, manager *peer.Manager) error {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -100,6 +102,28 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager) e
 // }
 
 func handleConnection(conn net.Conn) error {
+
+	handshake, err := protocol.ReadFrame(conn)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return fmt.Errorf("read HELLO message from %s: %w", conn.RemoteAddr(), err)
+	}
+	envelope, err := protocol.DecodeMessage(handshake)
+	if err != nil {
+		return fmt.Errorf("decode HELLO message from %s: %w", conn.RemoteAddr(), err)
+	}
+	if envelope.Type != protocol.MessageTypeHello {
+		return fmt.Errorf("expected HELLO as first message")
+	}
+	if envelope.SenderID == "" {
+		return fmt.Errorf("HELLO has empty sender ID")
+	}
+
+	peerID := envelope.SenderID
+	fmt.Println("Peer identified:", peerID)
+
 	for {
 		message, err := protocol.ReadFrame(conn)
 		if err != nil {
@@ -117,8 +141,14 @@ func handleConnection(conn net.Conn) error {
 
 		switch envelope.Type {
 		case protocol.MessageTypeMessage:
-			fmt.Printf("[%s] %s\n", envelope.SenderID, envelope.Payload)
-
+			if envelope.SenderID != peerID {
+				return fmt.Errorf(
+					"sender ID mismatch: expected %q, got %q",
+					peerID,
+					envelope.SenderID,
+				)
+			}
+			fmt.Printf("[%s] %s\n", peerID, envelope.Payload)
 		default:
 			return fmt.Errorf("unsupported message type: %q", envelope.Type)
 		}

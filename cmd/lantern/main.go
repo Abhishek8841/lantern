@@ -7,11 +7,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"time"
 
 	"github.com/abhishek8841/lantern/internal/identity"
 	"github.com/abhishek8841/lantern/internal/peer"
-	"github.com/abhishek8841/lantern/internal/protocol"
 	"github.com/abhishek8841/lantern/internal/transport/tcp"
 )
 
@@ -35,46 +33,33 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		
+
 		peerConn, err := tcp.DialPeer("127.0.0.1:8080")
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer peerConn.Close()
 
+		if err := peerConn.SendHello(peerID); err != nil {
+			log.Fatalf("send HELLO: %v", err)
+		}
+
 		fmt.Println("Connected to peer 127.0.0.1:8080")
 		fmt.Println("Type a message and press Enter. Use /quit to exit.")
 
 		scanner := bufio.NewScanner(os.Stdin)
 
-		for {
+		for scanner.Scan() {
 			fmt.Print("> ")
-			if !scanner.Scan() {
-				return
-			}
-
+			
 			message := scanner.Text()
 
 			if message == "/quit" {
 				break
 			}
 
-			envelope := protocol.Envelope{
-				Type:      protocol.MessageTypeMessage,
-				ID:        protocol.NewMessageID(),
-				SenderID:  peerID,
-				Timestamp: time.Now().UTC(),
-				Payload:   message,
-			}
-
-			data, err := protocol.EncodeMessage(envelope)
-			if err != nil {
-				log.Printf("encode message: %v", err)
-				break
-			}
-
-			if err := peerConn.SendMessage(string(data)); err != nil {
-				log.Printf("send message: %v", err)
+			if err := peerConn.SendMessage(peerID, message); err != nil {
+				log.Printf("send MESSAGE: %v", err)
 				break
 			}
 		}
