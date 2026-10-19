@@ -60,7 +60,7 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager, I
 
 		go func(conn net.Conn) {
 			defer handlers.Done()
-			serverConnection(conn, ID, ctx, manager)
+			ServeConnection(conn, ID, ctx, manager)
 		}(conn)
 	}
 	_ = manager.CloseAll()
@@ -68,7 +68,7 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager, I
 	return returnError
 }
 
-func serverConnection(conn net.Conn, ID string, ctx context.Context, manager *peer.Manager) {
+func ServeConnection(conn net.Conn, ID string, ctx context.Context, manager *peer.Manager) {
 	defer conn.Close()
 	pConn := NewPeerConn(conn)
 	remoteID, err := performHandshake(pConn, ID)
@@ -81,7 +81,7 @@ func serverConnection(conn net.Conn, ID string, ctx context.Context, manager *pe
 
 	p := &peer.Peer{
 		ID:   remoteID,
-		Conn: conn,
+		Conn: pConn,
 	}
 
 	successfullAdd := manager.Add(p)

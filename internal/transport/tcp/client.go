@@ -18,12 +18,12 @@ func NewPeerConn(conn net.Conn) *PeerConn {
 	return &PeerConn{conn: conn}
 }
 
-func DialPeer(address string) (*PeerConn, error) {
+func DialPeer(address string) (net.Conn, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, fmt.Errorf("net.Dial() error: %w", err)
 	}
-	return NewPeerConn(conn), nil
+	return conn, nil
 }
 
 func (p *PeerConn) Close() error {
@@ -38,10 +38,10 @@ func (p *PeerConn) sendEnvelope(message protocol.Envelope) error {
 	if err != nil {
 		return fmt.Errorf("encode message: %w", err)
 	}
-	
+
 	p.writeMu.Lock()
 	defer p.writeMu.Unlock()
-	
+
 	if err := protocol.WriteFrame(p.conn, data); err != nil {
 		return fmt.Errorf("protocol.WriteFrame() error: %w", err)
 	}

@@ -47,15 +47,12 @@ func main() {
 
 	// case "send":
 	time.Sleep(2 * time.Second)
-	peerConn, err := tcp.DialPeer("127.0.0.1:8080")
+	conn, err := tcp.DialPeer("127.0.0.1:8080")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("dial peer: %v", err)
 	}
-	defer peerConn.Close()
 
-	if err := peerConn.SendHello(peerID); err != nil {
-		log.Fatalf("send HELLO: %v", err)
-	}
+	go tcp.ServeConnection(conn, peerID, ctx, manager)
 
 	fmt.Println("Connected to peer 127.0.0.1:8080")
 	fmt.Println("Type a message and press Enter. Use /quit to exit.")
