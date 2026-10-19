@@ -90,3 +90,13 @@ func (m *Manager) SendMessage(localID, peerID, message string) error {
 	}
 	return p.Conn.SendMessage(localID, message)
 }
+
+func (m *Manager) List() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	ids := make([]string, 0, len(m.peers))
+	for id := range m.peers {
+		ids = append(ids, id)
+	}
+	return ids
+}

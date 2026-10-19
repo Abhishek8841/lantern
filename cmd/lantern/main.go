@@ -37,33 +37,34 @@ func main() {
 		}
 	}()
 
-	if *connectAddr == "" {
-		fmt.Println("Listening only. Press Ctrl+C to quit.")
-		<-ctx.Done()
-		return
-	}
-
-	conn, err := tcp.DialPeer(*connectAddr)
-	if err != nil {
-		log.Fatalf("dial peer: %v", err)
-	}
-
-	result := make(chan tcp.ConnectionResult, 1)
-
-	go tcp.ServeConnection(conn, peerID, ctx, manager, result)
+	// if *connectAddr == "" {
+	// 	fmt.Println("Listening only. Press Ctrl+C to quit.")
+	// 	<-ctx.Done()
+	// 	return
+	// }
 
 	var remoteID string
-
-	select {
-	case connection := <-result:
-		if connection.Err != nil {
-			log.Fatalf("connect to peer: %v", connection.Err)
+	if *connectAddr != "" {
+		conn, err := tcp.DialPeer(*connectAddr)
+		if err != nil {
+			log.Fatalf("dial peer: %v", err)
 		}
-		remoteID = connection.PeerID
-		fmt.Println("Connected to peer:", connection.PeerID)
 
-	case <-ctx.Done():
-		return
+		result := make(chan tcp.ConnectionResult, 1)
+
+		go tcp.ServeConnection(conn, peerID, ctx, manager, result)
+
+		select {
+		case connection := <-result:
+			if connection.Err != nil {
+				log.Fatalf("connect to peer: %v", connection.Err)
+			}
+			remoteID = connection.PeerID
+			fmt.Println("Connected to peer:", connection.PeerID)
+
+		case <-ctx.Done():
+			return
+		}
 	}
 
 	fmt.Println("Type a message and press Enter. Use /quit to exit.")
@@ -83,9 +84,40 @@ func main() {
 			break
 		}
 
-		if err := manager.SendMessage(peerID, remoteID, message); err != nil {
-			log.Printf("send MESSAGE: %v", err)
-			break
+		if message == "/peers" {
+			ids := manager.List()
+
+			if len(ids) == 0 {
+				fmt.Println("No peers connected.")
+				continue
+			}
+
+			fmt.Println("Connected peers:")
+			for _, id := range ids {
+				fmt.Println(" -", id)
+			}
+			continue
+		}
+
+		if len(message) > 6 && message[:6] == "/chat " {
+			targetID := message[6:]
+
+			if _, ok := manager.Get(targetID); !ok {
+				fmt.Println("Peer not found. Use /peers to see connected peers.")
+				continue
+			}
+
+			remoteID = targetID
+			fmt.Println("Now chatting with:", remoteID)
+			continue
+		}
+		if remoteID != "" {
+			if err := manager.SendMessage(peerID, remoteID, message); err != nil {
+				log.Printf("send MESSAGE: %v", err)
+				break
+			}
+		} else {
+			fmt.Println("No peer selected. Use /peers, then /chat <peer-id>.")
 		}
 	}
 
