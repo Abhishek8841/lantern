@@ -3,13 +3,19 @@ package tcp
 import (
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/abhishek8841/lantern/internal/protocol"
 )
 
 type PeerConn struct {
-	conn net.Conn
+	conn    net.Conn
+	writeMu sync.Mutex
+}
+
+func NewPeerConn(conn net.Conn) *PeerConn {
+	return &PeerConn{conn: conn}
 }
 
 func DialPeer(address string) (*PeerConn, error) {
@@ -17,9 +23,7 @@ func DialPeer(address string) (*PeerConn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("net.Dial() error: %w", err)
 	}
-	return &PeerConn{
-		conn: conn,
-	}, nil
+	return NewPeerConn(conn), nil
 }
 
 func (p *PeerConn) Close() error {
@@ -34,6 +38,10 @@ func (p *PeerConn) sendEnvelope(message protocol.Envelope) error {
 	if err != nil {
 		return fmt.Errorf("encode message: %w", err)
 	}
+	
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
+	
 	if err := protocol.WriteFrame(p.conn, data); err != nil {
 		return fmt.Errorf("protocol.WriteFrame() error: %w", err)
 	}
@@ -69,20 +77,36 @@ func (p *PeerConn) SendACK(peerID string, originalMessageID string) error {
 	})
 }
 
-func (p *PeerConn) ReadACKFrame() (protocol.Envelope, error) {
+func (p *PeerConn) ReadEnvelope() (protocol.Envelope, error) {
 	data, err := protocol.ReadFrame(p.conn)
 	if err != nil {
-		return protocol.Envelope{}, fmt.Errorf("read ACK frame error: %w", err)
+		return protocol.Envelope{}, fmt.Errorf("read envelope frame error: %w", err)
 	}
 	message, err := protocol.DecodeMessage(data)
 	if err != nil {
-		return protocol.Envelope{}, fmt.Errorf("decode ACK envelope error: %w", err)
+		return protocol.Envelope{}, fmt.Errorf("decode envelope error: %w", err)
 	}
-	if message.Type != protocol.MessageTypeAck {
-		return protocol.Envelope{}, fmt.Errorf("expected ACK, received %q", message.Type)
-	}
-
 	return message, nil
+}
+
+func (p *PeerConn) Handshake(localID string) (string, error) {
+	if err := p.SendHello(localID); err != nil {
+		return "", fmt.Errorf("send HELLO: %w", err)
+	}
+	envelope, err := p.ReadEnvelope()
+	if err != nil {
+		return "", fmt.Errorf("read HELLO: %w", err)
+	}
+	if envelope.Type != protocol.MessageTypeHello {
+		return "", fmt.Errorf("expected HELLO, received %q", envelope.Type)
+	}
+	if envelope.SenderID == "" {
+		return "", fmt.Errorf("HELLO has empty sender ID")
+	}
+	if envelope.SenderID == localID {
+		return "", fmt.Errorf("remote peer has the same ID as local peer")
+	}
+	return envelope.SenderID, nil
 }
 
 // func SendMessage(address string, message string) error {

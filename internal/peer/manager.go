@@ -24,6 +24,10 @@ func (m *Manager) Add(p *Peer) bool {
 	if m.shutting {
 		return false
 	}
+	// concurrency -> prevent 2 connection check
+	if _, exists := m.peers[p.ID]; exists {
+		return false
+	}
 
 	m.peers[p.ID] = p
 	return true
@@ -37,11 +41,13 @@ func (m *Manager) Get(id string) (*Peer, bool) {
 	return p, ok
 }
 
-func (m *Manager) Remove(id string) {
+func (m *Manager) Remove(p *Peer) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	delete(m.peers, id)
+	current, ok := m.peers[p.ID]
+	if ok && current == p {
+		delete(m.peers, p.ID)
+	}
 }
 
 func (m *Manager) Count() int {

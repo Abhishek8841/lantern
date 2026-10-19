@@ -24,10 +24,16 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager, I
 
 	var handlers sync.WaitGroup
 
+	shutdown := make(chan struct{})
 	go func() {
-		<-ctx.Done()
-		_ = listener.Close()
+		select {
+		case <-ctx.Done():
+			_ = listener.Close()
+		case <-shutdown:
+			return
+		}
 	}()
+	defer close(shutdown)
 
 	fmt.Println("LANtern listening on", listener.Addr())
 
@@ -48,35 +54,50 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager, I
 			break
 		}
 
-		p := &peer.Peer{
-			ID:   conn.RemoteAddr().String(),
-			Conn: conn,
-		}
-
-		successfullAdd := manager.Add(p)
-		if !successfullAdd {
-			_ = conn.Close()
-			continue
-		}
-		handlers.Add(1)
-
 		fmt.Println("Peer connected:", conn.RemoteAddr())
 
-		go func(p *peer.Peer) {
+		handlers.Add(1)
+
+		go func(conn net.Conn) {
 			defer handlers.Done()
-			defer p.Conn.Close()
-			defer manager.Remove(p.ID)
-			if err := handleConnection(p.Conn, ID); err != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				fmt.Println("Connection ended:", err)
-			}
-		}(p)
+			serverConnection(conn, ID, ctx, manager)
+		}(conn)
 	}
 	_ = manager.CloseAll()
 	handlers.Wait()
 	return returnError
+}
+
+func serverConnection(conn net.Conn, ID string, ctx context.Context, manager *peer.Manager) {
+	defer conn.Close()
+	pConn := NewPeerConn(conn)
+	remoteID, err := performHandshake(pConn, ID)
+	if err != nil {
+		if ctx.Err() == nil {
+			fmt.Println("handshake failed:", err)
+		}
+		return
+	}
+
+	p := &peer.Peer{
+		ID:   remoteID,
+		Conn: conn,
+	}
+
+	successfullAdd := manager.Add(p)
+	if !successfullAdd {
+		_ = conn.Close()
+		return
+	}
+
+	defer manager.Remove(p)
+	if err := handleConnection(pConn, ID, remoteID); err != nil {
+		if ctx.Err() == nil {
+			fmt.Println("Connection ended:", err)
+		}
+		return
+	}
+
 }
 
 // func handleConnection(conn net.Conn) error {
@@ -101,50 +122,51 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager, I
 // 	}
 // }
 
-func handleConnection(conn net.Conn, ID string) error {
-
-	handshake, err := protocol.ReadFrame(conn)
+func performHandshake(p *PeerConn, localID string) (string, error) {
+	remoteID, err := p.Handshake(localID)
 	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil
-		}
-		return fmt.Errorf("read HELLO message from %s: %w", conn.RemoteAddr(), err)
+		return "", fmt.Errorf("handshake with %s: %w", p.conn.RemoteAddr(), err)
 	}
-	envelope, err := protocol.DecodeMessage(handshake)
-	if err != nil {
-		return fmt.Errorf("decode HELLO message from %s: %w", conn.RemoteAddr(), err)
-	}
-	if envelope.Type != protocol.MessageTypeHello {
-		return fmt.Errorf("expected HELLO as first message")
-	}
-	if envelope.SenderID == "" {
-		return fmt.Errorf("HELLO has empty sender ID")
-	}
+	return remoteID, nil
+}
 
-	peerID := envelope.SenderID
-	fmt.Println("Peer identified:", peerID)
+func handleConnection(p *PeerConn, localID, remoteID string) error {
+	// handshake, err := protocol.ReadFrame(conn)
+	// if err != nil {
+	// 	if errors.Is(err, io.EOF) {
+	// 		return nil
+	// 	}
+	// 	return fmt.Errorf("read HELLO message from %s: %w", conn.RemoteAddr(), err)
+	// }
+	// envelope, err := protocol.DecodeMessage(handshake)
+	// if err != nil {
+	// 	return fmt.Errorf("decode HELLO message from %s: %w", conn.RemoteAddr(), err)
+	// }
+	// if envelope.Type != protocol.MessageTypeHello {
+	// 	return fmt.Errorf("expected HELLO as first message")
+	// }
+	// if envelope.SenderID == "" {
+	// 	return fmt.Errorf("HELLO has empty sender ID")
+	// }
+	// peerID := envelope.SenderID
+	// fmt.Println("Peer identified:", peerID)
 
 	for {
-		message, err := protocol.ReadFrame(conn)
+		envelope, err := p.ReadEnvelope()
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				fmt.Println("Peer disconnected:", conn.RemoteAddr())
+				fmt.Println("Peer disconnected:", p.conn.RemoteAddr())
 				return nil
 			}
-			return fmt.Errorf("read message from %s: %w", conn.RemoteAddr(), err)
-		}
-
-		envelope, err := protocol.DecodeMessage(message)
-		if err != nil {
-			return fmt.Errorf("decode message from %s: %w", conn.RemoteAddr(), err)
+			return fmt.Errorf("read message from %s: %w", p.conn.RemoteAddr(), err)
 		}
 
 		switch envelope.Type {
 		case protocol.MessageTypeMessage:
-			if envelope.SenderID != peerID {
+			if envelope.SenderID != remoteID {
 				return fmt.Errorf(
 					"sender ID mismatch: expected %q, got %q",
-					peerID,
+					remoteID,
 					envelope.SenderID,
 				)
 			}
@@ -153,13 +175,11 @@ func handleConnection(conn net.Conn, ID string) error {
 				return fmt.Errorf("received MESSAGE with empty ID")
 			}
 
-			p := PeerConn{conn: conn}
-
-			if err := p.SendACK(ID, envelope.ID); err != nil {
+			if err := p.SendACK(localID, envelope.ID); err != nil {
 				return fmt.Errorf("send ACK for message %s: %w", envelope.ID, err)
 			}
-			
-			fmt.Printf("[%s] %s\n", peerID, envelope.Payload)
+
+			fmt.Printf("[%s] %s\n", remoteID, envelope.Payload)
 		default:
 			return fmt.Errorf("unsupported message type: %q", envelope.Type)
 		}
