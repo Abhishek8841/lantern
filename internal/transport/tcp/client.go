@@ -22,7 +22,6 @@ func DialPeer(address string) (*PeerConn, error) {
 	}, nil
 }
 
-
 func (p *PeerConn) Close() error {
 	if err := p.conn.Close(); err != nil {
 		return fmt.Errorf("close peer connection: %w", err)
@@ -58,6 +57,32 @@ func (p *PeerConn) SendMessage(peerID string, message string) error {
 		Timestamp: time.Now().UTC(),
 		Payload:   message,
 	})
+}
+
+func (p *PeerConn) SendACK(peerID string, originalMessageID string) error {
+	return p.sendEnvelope(protocol.Envelope{
+		Type:           protocol.MessageTypeAck,
+		ID:             protocol.NewMessageID(),
+		SenderID:       peerID,
+		Timestamp:      time.Now().UTC(),
+		AcknowledgesID: originalMessageID,
+	})
+}
+
+func (p *PeerConn) ReadACKFrame() (protocol.Envelope, error) {
+	data, err := protocol.ReadFrame(p.conn)
+	if err != nil {
+		return protocol.Envelope{}, fmt.Errorf("read ACK frame error: %w", err)
+	}
+	message, err := protocol.DecodeMessage(data)
+	if err != nil {
+		return protocol.Envelope{}, fmt.Errorf("decode ACK envelope error: %w", err)
+	}
+	if message.Type != protocol.MessageTypeAck {
+		return protocol.Envelope{}, fmt.Errorf("expected ACK, received %q", message.Type)
+	}
+
+	return message, nil
 }
 
 // func SendMessage(address string, message string) error {

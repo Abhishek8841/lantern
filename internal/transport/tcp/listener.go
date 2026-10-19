@@ -12,9 +12,9 @@ import (
 	"github.com/abhishek8841/lantern/internal/protocol"
 )
 
-// fix the unhandled goroutine leak here is .Accept() errors ??? 
+// fix the unhandled goroutine leak here is .Accept() errors ???
 
-func StartListener(ctx context.Context, address string, manager *peer.Manager) error {
+func StartListener(ctx context.Context, address string, manager *peer.Manager, ID string) error {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		// this wraps the err inside another error ??? -> error.is() gives true in the wrapping case but == doesn't
@@ -66,7 +66,7 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager) e
 			defer handlers.Done()
 			defer p.Conn.Close()
 			defer manager.Remove(p.ID)
-			if err := handleConnection(p.Conn); err != nil {
+			if err := handleConnection(p.Conn, ID); err != nil {
 				if ctx.Err() != nil {
 					return
 				}
@@ -101,7 +101,7 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager) e
 // 	}
 // }
 
-func handleConnection(conn net.Conn) error {
+func handleConnection(conn net.Conn, ID string) error {
 
 	handshake, err := protocol.ReadFrame(conn)
 	if err != nil {
@@ -148,6 +148,17 @@ func handleConnection(conn net.Conn) error {
 					envelope.SenderID,
 				)
 			}
+
+			if envelope.ID == "" {
+				return fmt.Errorf("received MESSAGE with empty ID")
+			}
+
+			p := PeerConn{conn: conn}
+
+			if err := p.SendACK(ID, envelope.ID); err != nil {
+				return fmt.Errorf("send ACK for message %s: %w", envelope.ID, err)
+			}
+			
 			fmt.Printf("[%s] %s\n", peerID, envelope.Payload)
 		default:
 			return fmt.Errorf("unsupported message type: %q", envelope.Type)

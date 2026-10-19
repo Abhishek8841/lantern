@@ -15,11 +15,12 @@ const (
 )
 
 type Envelope struct {
-	Type      MessageType `json:"type"`
-	ID        string      `json:"id"`
-	SenderID  string      `json:"sender_id"`
-	Timestamp time.Time   `json:"timestamp"`
-	Payload   string      `json:"payload,omitempty"`
+	Type           MessageType `json:"type"`
+	ID             string      `json:"id"`
+	SenderID       string      `json:"sender_id"`
+	Timestamp      time.Time   `json:"timestamp"`
+	Payload        string      `json:"payload,omitempty"`
+	AcknowledgesID string      `json:"acknowledges_id,omitempty"`
 }
 
 func EncodeMessage(message Envelope) ([]byte, error) {
