@@ -60,7 +60,8 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager, I
 
 		go func(conn net.Conn) {
 			defer handlers.Done()
-			ServeConnection(conn, ID, ctx, manager)
+			result := make(chan ConnectionResult, 1)
+			ServeConnection(conn, ID, ctx, manager, result)
 		}(conn)
 	}
 	_ = manager.CloseAll()
@@ -68,7 +69,12 @@ func StartListener(ctx context.Context, address string, manager *peer.Manager, I
 	return returnError
 }
 
-func ServeConnection(conn net.Conn, ID string, ctx context.Context, manager *peer.Manager) {
+type ConnectionResult struct {
+	PeerID string
+	Err    error
+}
+
+func ServeConnection(conn net.Conn, ID string, ctx context.Context, manager *peer.Manager, result chan<- ConnectionResult) {
 	defer conn.Close()
 	pConn := NewPeerConn(conn)
 	remoteID, err := performHandshake(pConn, ID)
@@ -76,6 +82,7 @@ func ServeConnection(conn net.Conn, ID string, ctx context.Context, manager *pee
 		if ctx.Err() == nil {
 			fmt.Println("handshake failed:", err)
 		}
+		result <- ConnectionResult{Err: fmt.Errorf("handshake: %v", err)}
 		return
 	}
 
@@ -87,10 +94,14 @@ func ServeConnection(conn net.Conn, ID string, ctx context.Context, manager *pee
 	successfullAdd := manager.Add(p)
 	if !successfullAdd {
 		_ = conn.Close()
+		result <- ConnectionResult{
+			Err: fmt.Errorf("peer %q already connected or manager is shutting down", remoteID),
+		}
 		return
 	}
 
 	defer manager.Remove(p)
+	result <- ConnectionResult{PeerID: remoteID}
 	if err := handleConnection(pConn, ID, remoteID); err != nil {
 		if ctx.Err() == nil {
 			fmt.Println("Connection ended:", err)
@@ -180,6 +191,23 @@ func handleConnection(p *PeerConn, localID, remoteID string) error {
 			}
 
 			fmt.Printf("[%s] %s\n", remoteID, envelope.Payload)
+		case protocol.MessageTypeAck:
+			if envelope.SenderID != remoteID {
+				return fmt.Errorf(
+					"ACK sender ID mismatch: expected %q, got %q",
+					remoteID,
+					envelope.SenderID,
+				)
+			}
+
+			if envelope.AcknowledgesID == "" {
+				return fmt.Errorf("received ACK with empty acknowledged message ID")
+			}
+
+			// fmt.Printf("Message %s acknowledged by %s\n",
+			// 	envelope.AcknowledgesID,
+			// 	remoteID,
+			// )
 		default:
 			return fmt.Errorf("unsupported message type: %q", envelope.Type)
 		}

@@ -3,11 +3,11 @@ package main
 import (
 	"bufio"
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"time"
 
 	"github.com/abhishek8841/lantern/internal/identity"
 	"github.com/abhishek8841/lantern/internal/peer"
@@ -15,11 +15,13 @@ import (
 )
 
 func main() {
-	// if len(os.Args) < 2 {
-	// 	log.Fatal("usage: lantern listen | send")
-	// }
 
-	peerID, err := identity.LoadOrCreate("lantern-identity")
+	listenAddr := flag.String("listen", ":8080", "TCP listen address")
+	identityPath := flag.String("identity", "lantern-identity", "Identity file path")
+	connectAddr := flag.String("connect", "", "Address of peer to connect to")
+	flag.Parse()
+
+	peerID, err := identity.LoadOrCreate(*identityPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -29,32 +31,41 @@ func main() {
 	manager := peer.NewManager()
 
 	go func() {
-		if err := tcp.StartListener(ctx, ":8080", manager, peerID); err != nil {
+		if err := tcp.StartListener(ctx, *listenAddr, manager, peerID); err != nil {
 			log.Printf("listener stopped: %v", err)
 			stop()
 		}
 	}()
 
-	// switch os.Args[1] {
+	if *connectAddr == "" {
+		fmt.Println("Listening only. Press Ctrl+C to quit.")
+		<-ctx.Done()
+		return
+	}
 
-	// case "listen":
-	// 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	// 	defer stop()
-	// 	manager := peer.NewManager()
-	// 	if err := tcp.StartListener(ctx, ":8080", manager, peerID); err != nil {
-	// 		log.Fatal(err)
-	// 	}
-
-	// case "send":
-	time.Sleep(2 * time.Second)
-	conn, err := tcp.DialPeer("127.0.0.1:8080")
+	conn, err := tcp.DialPeer(*connectAddr)
 	if err != nil {
 		log.Fatalf("dial peer: %v", err)
 	}
 
-	go tcp.ServeConnection(conn, peerID, ctx, manager)
+	result := make(chan tcp.ConnectionResult, 1)
 
-	fmt.Println("Connected to peer 127.0.0.1:8080")
+	go tcp.ServeConnection(conn, peerID, ctx, manager, result)
+
+	var remoteID string
+
+	select {
+	case connection := <-result:
+		if connection.Err != nil {
+			log.Fatalf("connect to peer: %v", connection.Err)
+		}
+		remoteID = connection.PeerID
+		fmt.Println("Connected to peer:", connection.PeerID)
+
+	case <-ctx.Done():
+		return
+	}
+
 	fmt.Println("Type a message and press Enter. Use /quit to exit.")
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -72,7 +83,7 @@ func main() {
 			break
 		}
 
-		if err := peerConn.SendMessage(peerID, message); err != nil {
+		if err := manager.SendMessage(peerID, remoteID, message); err != nil {
 			log.Printf("send MESSAGE: %v", err)
 			break
 		}
@@ -81,9 +92,5 @@ func main() {
 	if err := scanner.Err(); err != nil {
 		log.Printf("read input: %v", err)
 	}
-
-	// default:
-	// 	log.Fatal("unknown mode: use listen or send")
-	// }
 
 }
