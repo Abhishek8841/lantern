@@ -80,3 +80,13 @@ func (m *Manager) CloseAll() error {
 }
 
 // select {} quick hack to keep a goroutine alive to test temporarily
+
+func (m *Manager) SendMessage(localID, peerID, message string) error {
+	m.mu.RLock()
+	p, ok := m.peers[peerID]
+	m.mu.RUnlock()
+	if !ok {
+		return fmt.Errorf("peer %q is not connected", peerID)
+	}
+	return p.Conn.SendMessage(localID, message)
+}
