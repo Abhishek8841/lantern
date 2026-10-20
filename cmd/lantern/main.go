@@ -153,6 +153,35 @@ func main() {
 			continue
 		}
 
+		if message == "/discover" {
+			entries, err := discovery.Discover(ctx)
+			if err != nil {
+				fmt.Println("Discovery failed:", err)
+				continue
+			}
+
+			if len(entries) == 0 {
+				fmt.Println("No LANtern services found.")
+				continue
+			}
+
+			fmt.Println("Discovered LANtern services:")
+
+			for _, entry := range entries {
+				fmt.Printf(
+					"Name: %s | Host: %s | Port: %d\n",
+					entry.Name,
+					entry.Host,
+					entry.Port,
+				)
+
+				fmt.Printf("  Addresses: %v\n", entry.AddrV4)
+				fmt.Printf("  Metadata: %v\n", entry.InfoFields)
+			}
+
+			continue
+		}
+
 		if strings.HasPrefix(message, "/connect ") {
 			addr := strings.TrimSpace(strings.TrimPrefix(message, "/connect "))
 			if addr == "" {

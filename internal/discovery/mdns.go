@@ -1,7 +1,9 @@
 package discovery
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/mdns"
 )
@@ -46,3 +48,33 @@ func Advertise(instanceName string, port int, peerID string) (*mdns.Server, erro
 
 	return server, nil
 }
+
+
+func Discover(ctx context.Context) ([]*mdns.ServiceEntry, error) {
+	entries := make(chan *mdns.ServiceEntry, 16)
+
+	params := mdns.DefaultParams(ServiceType)
+	params.Timeout = 3 * time.Second
+	params.Entries = entries
+
+	errCh := make(chan error, 1)
+
+	go func() {
+		err := mdns.QueryContext(ctx, params)
+		close(entries)
+		errCh <- err
+	}()
+
+	var discovered []*mdns.ServiceEntry
+
+	for entry := range entries {
+		discovered = append(discovered, entry)
+	}
+
+	if err := <-errCh; err != nil {
+		return discovered, fmt.Errorf("discover LANtern services: %w", err)
+	}
+
+	return discovered, nil
+}
+
