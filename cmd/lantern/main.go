@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 
 	"github.com/abhishek8841/lantern/internal/identity"
 	"github.com/abhishek8841/lantern/internal/peer"
@@ -72,7 +73,7 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for {
-		fmt.Print("> ")
+		// fmt.Print("> ")
 
 		if !scanner.Scan() {
 			break
@@ -82,6 +83,11 @@ func main() {
 
 		if message == "/quit" {
 			break
+		}
+
+		if message == "/exit-peer-chat" {
+			remoteID = ""
+			continue
 		}
 
 		if message == "/peers" {
@@ -111,10 +117,44 @@ func main() {
 			fmt.Println("Now chatting with:", remoteID)
 			continue
 		}
+
+		if strings.HasPrefix(message, "/connect ") {
+			addr := strings.TrimSpace(strings.TrimPrefix(message, "/connect "))
+			if addr == "" {
+				fmt.Println("Usage: /connect <host:port>")
+				continue
+			}
+			go func(addr string) {
+				conn, err := tcp.DialPeer(addr)
+				if err != nil {
+					fmt.Printf("dial peer: %v", err)
+					return
+				}
+
+				result := make(chan tcp.ConnectionResult, 1)
+
+				go tcp.ServeConnection(conn, peerID, ctx, manager, result)
+
+				select {
+				case connection := <-result:
+					if connection.Err != nil {
+						fmt.Printf("connect to peer: %v", connection.Err)
+						return
+					}
+					fmt.Println("Connected to peer:", connection.PeerID)
+
+				case <-ctx.Done():
+					return
+				}
+			}(addr)
+			continue
+		}
+
 		if remoteID != "" {
 			if err := manager.SendMessage(peerID, remoteID, message); err != nil {
 				log.Printf("send MESSAGE: %v", err)
-				break
+				remoteID = ""
+				continue
 			}
 		} else {
 			fmt.Println("No peer selected. Use /peers, then /chat <peer-id>.")
