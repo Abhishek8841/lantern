@@ -14,13 +14,24 @@ import (
 
 // fix the unhandled goroutine leak here is .Accept() errors ???
 
-func StartListener(ctx context.Context, address string, manager *peer.Manager, ID string) error {
+type ListenerResult struct {
+	Addr net.Addr
+	Err  error
+}
+
+func StartListener(ctx context.Context, address string, manager *peer.Manager, ID string, ready chan<- ListenerResult) error {
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
+		ready <- ListenerResult{
+			Err: fmt.Errorf("start TCP listener: %w", err),
+		}
 		// this wraps the err inside another error ??? -> error.is() gives true in the wrapping case but == doesn't
 		return fmt.Errorf("start TCP listener: %w", err)
 	}
 	defer listener.Close()
+	ready <- ListenerResult{
+		Addr: listener.Addr(),
+	}
 
 	var handlers sync.WaitGroup
 

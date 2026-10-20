@@ -6,10 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
 
+	"github.com/abhishek8841/lantern/internal/discovery"
 	"github.com/abhishek8841/lantern/internal/identity"
 	"github.com/abhishek8841/lantern/internal/peer"
 	"github.com/abhishek8841/lantern/internal/transport/tcp"
@@ -31,13 +33,46 @@ func main() {
 	defer stop()
 	manager := peer.NewManager()
 
+	ready := make(chan tcp.ListenerResult, 1)
+
 	go func() {
-		if err := tcp.StartListener(ctx, *listenAddr, manager, peerID); err != nil {
+		if err := tcp.StartListener(ctx, *listenAddr, manager, peerID, ready); err != nil {
 			log.Printf("listener stopped: %v", err)
 			stop()
 		}
 	}()
 
+	var listenerAddr net.Addr
+
+	select {
+	case result := <-ready:
+		if result.Err != nil {
+			log.Fatalf("start listener: %v", result.Err)
+		}
+
+		listenerAddr = result.Addr
+		fmt.Println("TCP listener ready at", listenerAddr)
+
+	case <-ctx.Done():
+		return
+	}
+
+	tcpAddr, ok := listenerAddr.(*net.TCPAddr)
+	if !ok {
+		log.Fatal("listener returned a non-TCP address")
+	}
+
+	mdnsServer, err := discovery.Advertise(
+		"LANtern-"+peerID[:8],
+		tcpAddr.Port,
+		peerID,
+	)
+	if err != nil {
+		log.Fatalf("start mDNS advertising: %v", err)
+	}
+	defer mdnsServer.Shutdown()
+
+	fmt.Println("Advertising LANtern on TCP port", tcpAddr.Port)
 	// if *connectAddr == "" {
 	// 	fmt.Println("Listening only. Press Ctrl+C to quit.")
 	// 	<-ctx.Done()
