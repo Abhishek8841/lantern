@@ -10,6 +10,35 @@ Everything runs over raw TCP sockets using a custom length-prefixed framing prot
 
 ---
 
+## Table of Contents
+
+- [In Action](#in-action)
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Installation & Running](#installation--running)
+  - [Prerequisites](#prerequisites)
+  - [Option 1 — Download Pre-built Binary](#option-1--download-the-pre-built-binary)
+  - [Option 2 — Clone & Build from Source](#option-2--clone--build-from-source)
+  - [Makefile Commands](#makefile-commands)
+  - [Quick Start — Two Peers on One Machine](#quick-start--two-peers-on-one-machine)
+  - [Connect the Peers](#connect-the-peers)
+  - [Chat](#chat)
+  - [CLI Flags](#cli-flags)
+  - [Connecting Across Devices on the Same LAN](#connecting-across-devices-on-the-same-lan)
+  - [Windows Firewall](#windows-firewall)
+  - [Troubleshooting](#troubleshooting)
+- [Architecture & Project Structure](#architecture--project-structure)
+  - [How a Message Flows](#how-a-message-flows)
+  - [Service Discovery: mDNS and mDNS-SD](#service-discovery-mdns-and-mdns-sd)
+- [What I Learned Building LANtern](#what-i-learned-building-lantern)
+- [Testing](#testing)
+  - [What's Tested](#whats-tested)
+- [Current Limitations](#current-limitations)
+  - [Probable Future Enhancements](#probable-future-enhancements)
+- [Contributing](#contributing)
+
+---
+
 ## In Action
 
 Two terminals on the same machine, chatting over TCP:
